@@ -1,6 +1,6 @@
 # ⛩ Esram_OS — Japan Prep Arc
 
-A self-updating daily command center, built from the **Gio OS v1** operating system doc.
+A self-updating daily command center, built from the **Esram OS v1** operating system doc.
 Not a motivational journal. You open it, it tells you the next visible instruction, you do it,
 free time unlocks. Japan (~2028, SSW construction route) keeps moving in the background.
 
