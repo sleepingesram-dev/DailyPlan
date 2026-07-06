@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Esram_OS — Japan Prep Arc</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="hwrap">
+    <div class="hrow">
+      <div class="brand"><span class="torii">⛩</span> ESRAM_OS <span class="ver">v1 · Japan Prep Arc</span></div>
+      <div class="japanchip" id="japanCountdown"></div>
+    </div>
+    <div class="hrow stats">
+      <div class="lvl" id="lvlBadge"></div>
+      <div class="xpbar"><div id="xpFill" style="width:0%"></div></div>
+      <div class="streakchip" id="streakBadge"></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="view-today" class="view active"></section>
+  <section id="view-money" class="view"></section>
+  <section id="view-japan" class="view"></section>
+  <section id="view-projects" class="view"></section>
+  <section id="view-more" class="view"></section>
+</main>
+
+<nav>
+  <button data-tab="today" class="active"><span class="ico">⚔️</span>Today</button>
+  <button data-tab="money"><span class="ico">💴</span>Money</button>
+  <button data-tab="japan"><span class="ico">⛩️</span>Japan</button>
+  <button data-tab="projects"><span class="ico">🛠️</span>Projects</button>
+  <button data-tab="more"><span class="ico">📦</span>More</button>
+</nav>
+
+<div id="toast"></div>
+
+<noscript><p style="padding:20px">Esram_OS needs JavaScript enabled.</p></noscript>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
