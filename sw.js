@@ -1,6 +1,6 @@
 /* Esram_OS service worker — network-first so new deploys auto-update,
    cache fallback so the app still opens with no signal. */
-const CACHE = 'esram-os-v1';
+const CACHE = 'esram-os-v2';
 const ASSETS = ['./', './index.html', './styles.css', './data.js', './app.js', './icon.svg', './manifest.webmanifest'];
 
 self.addEventListener('install', e => {

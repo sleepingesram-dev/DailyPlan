@@ -24,24 +24,38 @@ const fmtDate = k => { const d = parseKey(k); return `${WD[d.getDay()]}, ${MO[d.
 
 /* XP registry: checkId -> xp (first definition wins; ref tasks reuse) */
 const REG = {};
+const CORE = {};
 for (const [sid, sec] of Object.entries(D.sections))
-  for (const t of sec.tasks) if (!t.ref) REG[`${sid}.${t.k}`] = t.xp || 0;
+  for (const t of sec.tasks) if (!t.ref) { REG[`${sid}.${t.k}`] = t.xp || 0; if (t.core) CORE[`${sid}.${t.k}`] = 1; }
 const cid = (sid, t) => t.ref || `${sid}.${t.k}`;
+const goldFor = xp => Math.max(1, Math.round(xp / 5));
+function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 
 /* ---------- state ---------- */
 const LS = 'esram_os_v1';
 function seedState() {
   return {
-    v: 1, created: todayKey(), xp: 0,
+    v: 2, created: todayKey(), xp: 0, gold: 0,
     days: {}, weeks: {}, sprint: {}, phases: {}, vocab: {}, friendSync: {},
     scoreboard: { japanFund: 650, japanGoal: 14000, emergencyFund: 0, emergencyGoal: 500, carLoan: 12000, monthlyExpenses: 500, monthlyIncome: 1500, lastUpdated: null },
     deadlines: D.deadlineSeed.map(d => ({ id: uid(), done: false, doneDate: null, ...d })),
     projects: D.projectSeed.map(p => ({ id: uid(), blocker: '', ...p })),
     ledger: [], buyLater: [], brainDump: [], blockers: [], trophies: [], conLog: [],
+    inv: [], equip: {}, ach: {}, counters: { tasks: 0 }, boss: null,
+    exped: { steps: D.regions.map(() => 0), claimed: {}, done: {} },
   };
 }
+function migrate(s) {
+  if (s.v === 1) { // v1 -> v2: the game layer arrives; grant gold retroactively for earned XP
+    s.v = 2;
+    s.gold = Math.round((s.xp || 0) / 5);
+    s.inv = []; s.equip = {}; s.ach = {}; s.counters = { tasks: 0 }; s.boss = null;
+    s.exped = { steps: D.regions.map(() => 0), claimed: {}, done: {} };
+  }
+  return s;
+}
 let S = (() => {
-  try { const s = JSON.parse(localStorage.getItem(LS)); if (s && s.v === 1) return s; } catch (e) { /* corrupted -> reseed */ }
+  try { const s = JSON.parse(localStorage.getItem(LS)); if (s && (s.v === 1 || s.v === 2)) return migrate(s); } catch (e) { /* corrupted -> reseed */ }
   return seedState();
 })();
 function save() { localStorage.setItem(LS, JSON.stringify(S)); }
@@ -54,7 +68,12 @@ function day(k = todayKey()) {
     d = S.days[k] = { mode: autoMode(k), bad: false, checks: {}, win: {}, blocked: '', tomorrow: '', review: {}, boss: false };
     if (k === todayKey()) { // opening the app IS the task
       d.checks['mvh.openos'] = true;
+      d.awarded = { 'mvh.openos': true };
       S.xp += REG['mvh.openos'];
+      S.gold += goldFor(REG['mvh.openos']);
+      S.counters.tasks++;
+      addSteps(2);
+      hitBoss(2);
     }
     save();
   }
@@ -63,8 +82,16 @@ function day(k = todayKey()) {
 const modeIdOf = d => d.bad ? 'bad' : d.mode;
 
 function addXP(n, msg) {
+  const before = levelInfo().n;
   S.xp = Math.max(0, S.xp + n);
-  if (msg && n > 0) toast(`${msg} +${n} XP`);
+  if (n > 0) S.gold += goldFor(n);
+  else if (n < 0) S.gold = Math.max(0, S.gold - goldFor(-n));
+  const li = levelInfo();
+  if (li.n > before) {
+    const bonus = li.n * 10;
+    S.gold += bonus;
+    toast(`🎉 LEVEL UP! LV ${li.n} — ${li.name} (+${bonus} gold)`);
+  } else if (msg && n > 0) toast(`${msg} +${n} XP`);
   save();
 }
 
@@ -72,9 +99,120 @@ function toggleCheck(k, id) {
   const d = day(k);
   const on = !d.checks[id];
   d.checks[id] = on;
-  S.xp = Math.max(0, S.xp + (on ? 1 : -1) * (REG[id] || 0));
+  const xp = REG[id] || 0;
+  if (xp) addXP(on ? xp : -xp);
+  if (on) { // first completion of this task today feeds the game world
+    d.awarded = d.awarded || {};
+    if (!d.awarded[id]) {
+      d.awarded[id] = true;
+      S.counters.tasks++;
+      const n = CORE[id] ? 2 : 1;
+      addSteps(n);
+      hitBoss(n);
+    }
+  }
   bossCheck(k);
   save();
+}
+
+/* ---------- game layer: boss / expeditions / achievements / shop ---------- */
+function ensureBoss() {
+  const wk = mondayOf(todayKey());
+  if (!S.boss || S.boss.week !== wk) {
+    const b = D.bossNames[hash('boss' + wk) % D.bossNames.length];
+    S.boss = { week: wk, name: b[0], emoji: b[1], hp: D.bossHp, max: D.bossHp, kills: (S.boss && S.boss.kills) || 0 };
+  }
+}
+function hitBoss(dmg) {
+  ensureBoss();
+  if (S.boss.hp <= 0) return;
+  S.boss.hp = Math.max(0, S.boss.hp - dmg);
+  if (S.boss.hp === 0) {
+    S.boss.kills++;
+    S.gold += D.bossReward;
+    toast(`⚔️ ${S.boss.name} defeated! +${D.bossReward} gold`);
+  }
+}
+function activeRegion() {
+  for (let i = 0; i < D.regions.length; i++) if (S.exped.steps[i] < D.regions[i].steps) return i;
+  return -1;
+}
+function addSteps(n) {
+  const ri = activeRegion();
+  if (ri < 0) return;
+  const R = D.regions[ri];
+  const after = Math.min(R.steps, S.exped.steps[ri] + n);
+  S.exped.steps[ri] = after;
+  R.treasures.forEach((t, ti) => {
+    const key = `${ri}.${ti}`;
+    if (!S.exped.claimed[key] && after >= t.at) {
+      S.exped.claimed[key] = true;
+      S.gold += t.gold;
+      toast(`💎 Treasure found in ${R.name}! +${t.gold} gold`);
+    }
+  });
+  if (after >= R.steps && !S.exped.done[ri]) {
+    S.exped.done[ri] = true;
+    S.gold += R.reward;
+    toast(`${R.emoji} Region cleared: ${R.name}! +${R.reward} gold`);
+  }
+}
+function scanAchievements() {
+  const unlock = id => {
+    if (S.ach[id]) return;
+    const a = D.achievements.find(x => x.id === id);
+    S.ach[id] = todayKey();
+    S.gold += a.gold;
+    toast(`${a.icon} Achievement unlocked: ${a.name}! +${a.gold} gold`);
+    save();
+  };
+  if (S.counters.tasks >= 1) unlock('first_task');
+  if (S.counters.tasks >= 100) unlock('tasks100');
+  if (S.counters.tasks >= 500) unlock('tasks500');
+  if (Object.keys(S.days).some(k => dayWon(k))) unlock('day_won');
+  const st = streak();
+  if (st >= 7) unlock('streak7');
+  if (st >= 30) unlock('streak30');
+  const lv = levelInfo().n;
+  if (lv >= 5) unlock('level5');
+  if (lv >= 10) unlock('level10');
+  if (S.deadlines.some(x => x.done)) unlock('first_deadline');
+  const jf = Number(S.scoreboard.japanFund) || 0;
+  if (jf >= 1000) unlock('japan1k');
+  if (jf >= 5000) unlock('japan5k');
+  if (jf >= 14000) unlock('japan14k');
+  if (D.vocab[0].words.every((_, wi) => S.vocab['0.' + wi])) unlock('vocab20');
+  if (S.inv.length) unlock('first_buy');
+  if (['weapon', 'shield', 'helmet', 'armor', 'accessory'].every(s => S.equip[s])) unlock('full_set');
+  if (S.equip.pet) unlock('first_pet');
+  const regionDone = ri => S.exped.steps[ri] >= D.regions[ri].steps;
+  if (regionDone(0)) unlock('region1');
+  if (D.regions.every((_, ri) => regionDone(ri))) unlock('region_all');
+  if (S.boss && S.boss.kills >= 1) unlock('boss_first');
+  if (S.boss && S.boss.kills >= 5) unlock('boss5');
+}
+function shopStock() {
+  let x = hash('shop' + mondayOf(todayKey())) || 1;
+  const rnd = () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
+  const pool = [...D.gear], stock = [];
+  while (stock.length < 6 && pool.length) stock.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  return stock;
+}
+
+/* floating +XP / coin particles (the Pixelio juice) */
+function burst(x, y, xp) {
+  const mk = (txt, dx, delay, cls) => {
+    const s = document.createElement('span');
+    s.className = 'pfly ' + cls;
+    s.textContent = txt;
+    s.style.left = (x + dx) + 'px';
+    s.style.top = y + 'px';
+    s.style.animationDelay = delay + 'ms';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 1400);
+  };
+  if (xp > 0) { mk(`+${xp} XP`, -14, 0, 'pxp'); mk(`🪙+${goldFor(xp)}`, 18, 130, 'pgold'); }
+  else mk('✓', 0, 0, 'pxp');
 }
 function bossCheck(k) {
   if (parseKey(k).getDay() !== 5) return; // Friday only
@@ -168,8 +306,9 @@ function renderHeader() {
   const li = levelInfo();
   $('#lvlBadge').innerHTML = `LV ${li.n} · ${esc(li.name)} <small>${S.xp}${li.next ? ' / ' + li.next : ''} XP</small>`;
   $('#xpFill').style.width = li.pct + '%';
+  $('#goldBadge').textContent = `🪙 ${S.gold}`;
   const st = streak();
-  $('#streakBadge').textContent = st > 0 ? `🔥 ${st}-day streak` : '🔥 0';
+  $('#streakBadge').textContent = st > 0 ? `🔥 ${st}` : '🔥 0';
   const dj = daysUntil(D.japanWindowStart);
   $('#japanCountdown').textContent = dj > 0 ? `🗾 ${dj} days to Japan window` : '🗾 Japan window is NOW';
 }
@@ -360,6 +499,130 @@ function renderToday() {
   if (m.review) { html += reviewCard(k); html += nextWeekCard(k); }
   html += endOfDayCard(k);
   $('#view-today').innerHTML = html;
+}
+
+/* ---------- HERO view (game layer) ---------- */
+const gearById = id => D.gear.find(g => g.id === id);
+
+function drawAvatar() {
+  const cv = $('#heroCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+  ctx.clearRect(0, 0, 24, 24);
+  const P = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+  const eq = slot => S.equip[slot] ? gearById(S.equip[slot]) : null;
+  const armor = eq('armor'), helmet = eq('helmet'), weapon = eq('weapon'),
+        shield = eq('shield'), acc = eq('accessory'), pet = eq('pet');
+  // base hero
+  P(9, 2, 6, 2, '#4a3626');                      // hair
+  P(9, 4, 6, 4, '#e8b98a');                      // face
+  P(10, 5, 1, 1, '#111'); P(13, 5, 1, 1, '#111'); // eyes
+  P(9, 8, 6, 6, armor ? armor.px : '#2d6cdf');   // torso
+  if (armor) P(9, 8, 6, 1, '#0b0f14');           // armor trim
+  P(7, 8, 2, 5, '#e8b98a'); P(15, 8, 2, 5, '#e8b98a'); // arms
+  P(9, 14, 2, 5, '#374151'); P(13, 14, 2, 5, '#374151'); // legs
+  P(8, 19, 3, 2, '#6b4a2b'); P(13, 19, 3, 2, '#6b4a2b'); // boots
+  if (helmet) { P(8, 1, 8, 2, helmet.px); P(8, 3, 1, 2, helmet.px); P(15, 3, 1, 2, helmet.px); }
+  if (weapon) { P(17, 3, 2, 10, weapon.px); P(16, 11, 4, 2, '#6b4a2b'); }
+  if (shield) { P(3, 7, 4, 7, shield.px); P(4, 9, 2, 3, '#0b0f14'); }
+  if (acc)    { P(11, 9, 2, 2, acc.px); }
+  if (pet)    { P(19, 16, 4, 4, pet.px); P(19, 15, 1, 1, pet.px); P(22, 15, 1, 1, pet.px); P(20, 17, 1, 1, '#111'); }
+}
+
+function renderHero() {
+  ensureBoss();
+  const li = levelInfo();
+  const slots = ['weapon', 'shield', 'helmet', 'armor', 'accessory', 'pet'];
+
+  let html = `<div class="card">
+    <div class="herotop">
+      <canvas id="heroCanvas" width="24" height="24"></canvas>
+      <div class="grow">
+        <div style="font-size:17px;font-weight:800">LV ${li.n} · ${esc(li.name)}</div>
+        <div class="pbar mt"><div style="width:${li.pct}%"></div></div>
+        <div class="pmeta"><span>${S.xp} XP</span><span>${li.next ? 'next: ' + li.next : 'max level'}</span></div>
+        <div class="statgrid">
+          <div class="stat"><div class="sv" style="color:var(--gold)">🪙 ${S.gold}</div><div class="sk">Gold — every task pays</div></div>
+          <div class="stat"><div class="sv">${S.counters.tasks}</div><div class="sk">Tasks completed all-time</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="slots">${slots.map(sl => {
+      const g = S.equip[sl] ? gearById(S.equip[sl]) : null;
+      return `<div class="slot ${g ? 'r-' + g.rarity : ''}" ${g ? `data-equip="${g.id}" title="tap to unequip"` : ''}>
+        <div class="semoji">${g ? g.emoji : '·'}</div><div class="sname">${g ? esc(g.name) : sl}</div></div>`;
+    }).join('')}</div>
+  </div>`;
+
+  const hpPct = Math.round(100 * S.boss.hp / S.boss.max);
+  html += `<div class="card">
+    <div class="cardhead"><h3>Weekly Boss</h3><span class="chip">${S.boss.kills} slain</span><span class="chip mode">respawns Monday</span></div>
+    <div class="bossrow"><span class="bossemoji">${S.boss.emoji}</span>
+      <div class="grow"><b>${esc(S.boss.name)}</b>
+        <div class="pbar hp mt"><div style="width:${hpPct}%"></div></div>
+        <div class="pmeta"><span>${S.boss.hp} / ${S.boss.max} HP</span><span>${S.boss.hp === 0 ? 'DEFEATED ⚔️' : 'every task = 1 hit, core tasks = 2'}</span></div>
+      </div></div>
+    ${S.boss.hp === 0 ? '<div class="notice gold mt">Boss down. Reward claimed. A new one crawls out of the swamp on Monday.</div>' : ''}
+  </div>`;
+
+  const ri = activeRegion();
+  const regionRows = D.regions.map((R, i) => {
+    const steps = S.exped.steps[i], done = steps >= R.steps, active = i === ri;
+    const pct = Math.round(100 * steps / R.steps);
+    const marks = R.treasures.map((t, ti) => `<span class="tmark ${S.exped.claimed[`${i}.${ti}`] ? 'claimed' : ''}" style="left:${100 * t.at / R.steps}%">💎</span>`).join('');
+    return `<div class="region ${done ? 'done' : ''} ${active ? 'active' : ''}">
+      <div class="rowitem"><span style="font-size:20px">${R.emoji}</span>
+        <div class="grow"><div class="title">${esc(R.name)} ${done ? '✓' : active ? '<span class="chip ok">exploring</span>' : '<span class="chip">locked</span>'}</div>
+        ${active || done ? `<div class="pbar exp"><div style="width:${pct}%"></div>${marks}</div>
+        <div class="pmeta"><span>${steps}/${R.steps} steps</span><span>clear reward: 🪙${R.reward}</span></div>` : `<div class="meta">${R.steps} steps · reward 🪙${R.reward}</div>`}
+        </div></div></div>`;
+  }).join('');
+  html += `<div class="card">
+    <div class="cardhead"><h3>Expedition</h3><span class="chip mode">${ri < 0 ? 'ALL REGIONS CLEARED' : 'the road to Japan'}</span></div>
+    <p class="sub">Every completed task carries you forward (core tasks count double). Treasures 💎 are claimed automatically as you pass them.</p>
+    ${regionRows}
+  </div>`;
+
+  const stock = shopStock();
+  html += `<div class="card">
+    <div class="cardhead"><h3>Weekly Shop</h3><span class="chip pick">restocks Monday</span></div>
+    <p class="sub">Spend task-earned gold on gear for the hero. This is the only shop where impulse buying is encouraged.</p>
+    ${stock.map(g => {
+      const owned = S.inv.includes(g.id);
+      return `<div class="rowitem"><span style="font-size:20px">${g.emoji}</span>
+        <div class="grow"><div class="title">${esc(g.name)} <span class="chip r-${g.rarity}">${g.rarity}</span></div>
+        <div class="meta">${g.slot}</div></div>
+        ${owned ? '<span class="chip ok">owned</span>' : `<button class="btn small ${S.gold >= g.price ? 'good' : ''}" data-shopbuy="${g.id}">🪙 ${g.price}</button>`}
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  if (S.inv.length) {
+    html += `<div class="card">
+      <div class="cardhead"><h3>Inventory</h3><span class="prog">${S.inv.length}/${D.gear.length}</span></div>
+      <p class="sub">Tap an item to equip it. Tap an equipped slot above to unequip.</p>
+      <div class="invgrid">${S.inv.map(id => {
+        const g = gearById(id);
+        if (!g) return '';
+        const on = S.equip[g.slot] === id;
+        return `<button class="invitem r-${g.rarity} ${on ? 'on' : ''}" data-equip="${id}">
+          <span class="iemoji">${g.emoji}</span><span class="iname">${esc(g.name)}</span>${on ? '<span class="chip ok">equipped</span>' : ''}</button>`;
+      }).join('')}</div>
+    </div>`;
+  }
+
+  const nAch = Object.keys(S.ach).length;
+  html += `<div class="card">
+    <div class="cardhead"><h3>Achievements</h3><span class="prog ${nAch === D.achievements.length ? 'full' : ''}">${nAch}/${D.achievements.length}</span></div>
+    <div class="achgrid">${D.achievements.map(a => {
+      const got = S.ach[a.id];
+      return `<div class="ach ${got ? 'on' : ''}"><span class="aicon">${got ? a.icon : '🔒'}</span>
+        <div><b>${esc(a.name)}</b><div class="ameta">${esc(a.desc)} · 🪙${a.gold}${got ? ' · ' + esc(got) : ''}</div></div></div>`;
+    }).join('')}</div>
+  </div>`;
+
+  $('#view-hero').innerHTML = html;
+  drawAvatar();
 }
 
 /* ---------- MONEY view ---------- */
@@ -682,8 +945,8 @@ function renderMore() {
 }
 
 /* ---------- render dispatch ---------- */
-const RENDER = { today: renderToday, money: renderMoney, japan: renderJapan, projects: renderProjects, more: renderMore };
-function renderAll() { renderHeader(); RENDER[activeTab](); }
+const RENDER = { today: renderToday, hero: renderHero, money: renderMoney, japan: renderJapan, projects: renderProjects, more: renderMore };
+function renderAll() { scanAchievements(); renderHeader(); RENDER[activeTab](); }
 function switchTab(tab) {
   activeTab = tab;
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -694,12 +957,30 @@ function switchTab(tab) {
 
 /* ---------- events ---------- */
 document.addEventListener('click', e => {
-  const t = e.target.closest('[data-tab],[data-action],[data-win],[data-checkbtn],[data-buy],[data-skipbuy],[data-delledger],[data-donedeadline],[data-undodeadline],[data-blocker],[data-saveblocker],[data-clearblocker],[data-resolveblocker],[data-dumpdec],[data-vocab]');
+  const t = e.target.closest('[data-tab],[data-action],[data-win],[data-checkbtn],[data-buy],[data-skipbuy],[data-delledger],[data-donedeadline],[data-undodeadline],[data-blocker],[data-saveblocker],[data-clearblocker],[data-resolveblocker],[data-dumpdec],[data-vocab],[data-shopbuy],[data-equip]');
   if (!t) return;
   const k = todayKey();
   const ds = t.dataset;
 
   if (ds.tab) return switchTab(ds.tab);
+
+  if (ds.shopbuy) {
+    const g = gearById(ds.shopbuy);
+    if (S.inv.includes(g.id)) return;
+    if (S.gold < g.price) return toast(`Not enough gold — need 🪙${g.price}. Go finish a mission.`);
+    S.gold -= g.price;
+    S.inv.push(g.id);
+    if (!S.equip[g.slot]) S.equip[g.slot] = g.id; // auto-equip empty slot
+    save(); toast(`${g.emoji} ${g.name} acquired!`);
+    return renderAll();
+  }
+  if (ds.equip) {
+    const g = gearById(ds.equip);
+    if (!g || !S.inv.includes(g.id)) return;
+    S.equip[g.slot] = S.equip[g.slot] === g.id ? null : g.id;
+    save();
+    return renderAll();
+  }
 
   if (ds.win !== undefined) {
     const d = day(k);
@@ -707,7 +988,13 @@ document.addEventListener('click', e => {
     d.win[ds.win] = !effWin(k, w);
     save(); return renderAll();
   }
-  if (ds.checkbtn) { toggleCheck(k, ds.checkbtn); return renderAll(); }
+  if (ds.checkbtn) {
+    const r = t.getBoundingClientRect();
+    const wasOff = !day(k).checks[ds.checkbtn];
+    toggleCheck(k, ds.checkbtn);
+    if (wasOff) burst(r.left + r.width / 2, r.top, REG[ds.checkbtn] || 0);
+    return renderAll();
+  }
 
   if (ds.vocab) {
     const on = !S.vocab[ds.vocab];
@@ -879,7 +1166,12 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   const k = todayKey();
-  if (t.dataset.check) { toggleCheck(k, t.dataset.check); return renderAll(); }
+  if (t.dataset.check) {
+    const r = t.getBoundingClientRect();
+    toggleCheck(k, t.dataset.check);
+    if (t.checked) burst(r.left + r.width / 2, r.top, REG[t.dataset.check] || 0);
+    return renderAll();
+  }
   if (t.dataset.bind) { day(k)[t.dataset.bind] = t.value; save(); return renderAll(); }
   if (t.dataset.sb) {
     S.scoreboard[t.dataset.sb] = Number(t.value) || 0;
@@ -915,8 +1207,8 @@ document.addEventListener('change', e => {
     r.onload = () => {
       try {
         const data = JSON.parse(r.result);
-        if (!data || data.v !== 1) throw new Error('bad');
-        S = data; save(); renderAll(); toast('Backup restored ✓');
+        if (!data || (data.v !== 1 && data.v !== 2)) throw new Error('bad');
+        S = migrate(data); save(); renderAll(); toast('Backup restored ✓');
       } catch (err) { toast('That file is not a valid Esram_OS backup.'); }
     };
     r.readAsText(f);
@@ -954,4 +1246,8 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 
 /* ---------- boot ---------- */
 day(todayKey());
+ensureBoss();
 renderAll();
+
+/* console helpers for debugging/tests */
+window.esramDebug = { state: () => S, grant: g => { S.gold += g; save(); renderAll(); } };
