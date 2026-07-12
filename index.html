@@ -21,6 +21,7 @@
     <div class="hrow stats">
       <div class="lvl" id="lvlBadge"></div>
       <div class="xpbar"><div id="xpFill" style="width:0%"></div></div>
+      <div class="goldchip" id="goldBadge"></div>
       <div class="streakchip" id="streakBadge"></div>
     </div>
   </div>
@@ -28,6 +29,7 @@
 
 <main>
   <section id="view-today" class="view active"></section>
+  <section id="view-hero" class="view"></section>
   <section id="view-money" class="view"></section>
   <section id="view-japan" class="view"></section>
   <section id="view-projects" class="view"></section>
@@ -36,6 +38,7 @@
 
 <nav>
   <button data-tab="today" class="active"><span class="ico">⚔️</span>Today</button>
+  <button data-tab="hero"><span class="ico">🎮</span>Hero</button>
   <button data-tab="money"><span class="ico">💴</span>Money</button>
   <button data-tab="japan"><span class="ico">⛩️</span>Japan</button>
   <button data-tab="projects"><span class="ico">🛠️</span>Projects</button>

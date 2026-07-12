@@ -27,11 +27,30 @@ to a phone home screen as an app, and stores everything locally on the device.
 - **Auto-deploy** — every push to `main` publishes the app to GitHub Pages via Actions;
   the service worker is network-first, so installed copies pick up new versions on next load.
 
+## The game layer (Pixelio-style)
+
+Every real task completion feeds an RPG running underneath — nothing in the game
+can be farmed without doing actual life things:
+
+- **Gold** — every task pays coins alongside XP (with flying `+XP` / 🪙 particles)
+- **Hero avatar** — a pixel-art character with weapon / shield / helmet / armor /
+  accessory / pet slots, drawn live on a canvas
+- **Weekly shop** — 6 items rotate every Monday (seeded, no server needed); rarities
+  from common to legendary
+- **Expeditions** — 6 regions on the road to Japan (Hometown Streets → Hokkaido
+  Snowfields); each task = 1 step, core tasks = 2, treasures auto-claim on the way
+- **Weekly boss** — a new monster every Monday (Procrastination Oni, Doomscroll
+  Yōkai…); every task is a hit, kill it for gold
+- **Achievements** — 20 unlockables tied to real milestones (streaks, Japan Fund
+  targets, vocab, deadlines), each paying gold
+- **Level-up bonuses** — leveling pays gold on top of the rank titles
+
 ## The tabs
 
 | Tab | What lives there |
 |---|---|
 | ⚔️ **Today** | Win conditions, Minimum Viable Human, day-mode blocks, "What do I do next?", end-of-day check, Sunday review + next-week setup |
+| 🎮 **Hero** | Avatar + equipment, weekly boss, expedition map, weekly shop, inventory, achievements |
 | 💴 **Money** | Scoreboard (Japan/Emergency funds, car loan), pay-yourself calculator (20%/5%), Buy Later lock, ledger with weekly summary, 30-day money sprint |
 | ⛩️ **Japan** | Days-to-Japan countdown, critical deadlines, cat import pipeline, SSW route map, all 5 master-plan phases, weekly friend sync |
 | 🛠️ **Projects** | TradePass / ProtonFix / Fine Print Lab with next actions, blocker capture ("never let a project die because the next step is unclear"), brain dump |

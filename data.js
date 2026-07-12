@@ -481,6 +481,94 @@ const D = {
     { q: 'I feel behind', a: 'Priority stack: 1. Money → 2. Construction school → 3. Japanese → 4. Cats/passport → 5. Body maintenance → 6. Projects. Do the first incomplete thing from the highest area.' },
   ],
 
+  /* ============================================================
+     GAME LAYER (Pixelio-style): gold, gear, shop, expeditions,
+     achievements, weekly boss. All fueled by real task completions.
+     ============================================================ */
+
+  /* gear catalog — slot: weapon | shield | helmet | armor | accessory | pet */
+  gear: [
+    { id: 'hammer',    name: 'Trusty Hammer',      emoji: '🔨', slot: 'weapon',    rarity: 'common',    price: 50,  px: '#b0793a' },
+    { id: 'saw',       name: 'Ripsaw',             emoji: '🪚', slot: 'weapon',    rarity: 'common',    price: 60,  px: '#9aa7b3' },
+    { id: 'wrench',    name: 'Pipe Wrench',        emoji: '🔧', slot: 'weapon',    rarity: 'rare',      price: 140, px: '#d6663c' },
+    { id: 'drill',     name: 'Power Drill',        emoji: '🛠️', slot: 'weapon',    rarity: 'rare',      price: 180, px: '#f5b301' },
+    { id: 'katana',    name: 'Carpenter Katana',   emoji: '🗡️', slot: 'weapon',    rarity: 'epic',      price: 320, px: '#cfd8e3' },
+    { id: 'kanabo',    name: 'Oni Kanabō',         emoji: '⚔️', slot: 'weapon',    rarity: 'legendary', price: 650, px: '#e5484d' },
+    { id: 'plywood',   name: 'Plywood Sheet',      emoji: '🪵', slot: 'shield',    rarity: 'common',    price: 45,  px: '#b0793a' },
+    { id: 'toolbox',   name: 'Toolbox Lid',        emoji: '🧰', slot: 'shield',    rarity: 'common',    price: 55,  px: '#d6663c' },
+    { id: 'roadsign',  name: 'Road Sign Aegis',    emoji: '🚧', slot: 'shield',    rarity: 'rare',      price: 160, px: '#f5b301' },
+    { id: 'onishield', name: 'Oni-Face Shield',    emoji: '👹', slot: 'shield',    rarity: 'epic',      price: 300, px: '#e5484d' },
+    { id: 'hardhat',   name: 'Hard Hat',           emoji: '👷', slot: 'helmet',    rarity: 'common',    price: 40,  px: '#f5b301' },
+    { id: 'bandana',   name: 'Crew Bandana',       emoji: '🧢', slot: 'helmet',    rarity: 'common',    price: 45,  px: '#4ea1ff' },
+    { id: 'foxmask',   name: 'Kitsune Mask',       emoji: '🦊', slot: 'helmet',    rarity: 'rare',      price: 170, px: '#ff9d5c' },
+    { id: 'kabuto',    name: 'Kabuto Helm',        emoji: '🪖', slot: 'helmet',    rarity: 'epic',      price: 340, px: '#8b5cf6' },
+    { id: 'vest',      name: 'Hi-Vis Vest',        emoji: '🦺', slot: 'armor',     rarity: 'common',    price: 50,  px: '#f5a524' },
+    { id: 'flannel',   name: 'Lucky Flannel',      emoji: '👕', slot: 'armor',     rarity: 'common',    price: 55,  px: '#e5484d' },
+    { id: 'apron',     name: "Carpenter's Apron",  emoji: '🥋', slot: 'armor',     rarity: 'rare',      price: 150, px: '#8a6642' },
+    { id: 'happi',     name: 'Happi Coat',         emoji: '🎽', slot: 'armor',     rarity: 'rare',      price: 190, px: '#3b82f6' },
+    { id: 'samuraido', name: 'Samurai Dō',         emoji: '🛡️', slot: 'armor',     rarity: 'epic',      price: 380, px: '#374151' },
+    { id: 'tape',      name: 'Tape Measure',       emoji: '📏', slot: 'accessory', rarity: 'common',    price: 40,  px: '#f5b301' },
+    { id: 'omamori',   name: 'Omamori Charm',      emoji: '🧧', slot: 'accessory', rarity: 'rare',      price: 130, px: '#e5484d' },
+    { id: 'daruma',    name: 'Daruma Buddy',       emoji: '🎎', slot: 'accessory', rarity: 'rare',      price: 150, px: '#e5484d' },
+    { id: 'sensu',     name: 'Sensu Fan',          emoji: '🪭', slot: 'accessory', rarity: 'epic',      price: 280, px: '#f5f5f4' },
+    { id: 'torii',     name: 'Torii Pendant',      emoji: '⛩️', slot: 'accessory', rarity: 'legendary', price: 550, px: '#e5484d' },
+    { id: 'tiki',      name: 'Tiki the Cat',       emoji: '🐈', slot: 'pet',       rarity: 'rare',      price: 200, px: '#d6a35c' },
+    { id: 'meatball',  name: 'Meatball the Cat',   emoji: '🐈‍⬛', slot: 'pet',      rarity: 'rare',      price: 200, px: '#374151' },
+    { id: 'shiba',     name: 'Shiba Pup',          emoji: '🐕', slot: 'pet',       rarity: 'epic',      price: 350, px: '#f5a524' },
+    { id: 'tanuki',    name: 'Tanuki Trickster',   emoji: '🦝', slot: 'pet',       rarity: 'epic',      price: 380, px: '#8a6642' },
+    { id: 'crane',     name: 'Red-Crowned Crane',  emoji: '🕊️', slot: 'pet',       rarity: 'legendary', price: 600, px: '#f5f5f4' },
+  ],
+
+  raritiesOrder: ['common', 'rare', 'epic', 'legendary'],
+
+  /* expedition regions — steps come from completed tasks (1/task, 2 if core) */
+  regions: [
+    { name: 'Hometown Streets',    emoji: '🏘️', steps: 25,  reward: 60,
+      treasures: [{ at: 10, gold: 15 }, { at: 20, gold: 25 }] },
+    { name: 'Tidewater Yards',     emoji: '🏗️', steps: 40,  reward: 90,
+      treasures: [{ at: 15, gold: 20 }, { at: 30, gold: 35 }] },
+    { name: 'Savings Vault Depths', emoji: '🏦', steps: 60,  reward: 130,
+      treasures: [{ at: 20, gold: 25 }, { at: 40, gold: 30 }, { at: 55, gold: 40 }] },
+    { name: 'Kana Forest',         emoji: '🎋', steps: 80,  reward: 180,
+      treasures: [{ at: 25, gold: 30 }, { at: 50, gold: 40 }, { at: 70, gold: 50 }] },
+    { name: 'Misty Pacific Crossing', emoji: '🌊', steps: 110, reward: 250,
+      treasures: [{ at: 30, gold: 35 }, { at: 60, gold: 45 }, { at: 95, gold: 65 }] },
+    { name: 'Hokkaido Snowfields', emoji: '🏔️', steps: 150, reward: 400,
+      treasures: [{ at: 40, gold: 50 }, { at: 80, gold: 60 }, { at: 120, gold: 80 }, { at: 145, gold: 100 }] },
+  ],
+
+  /* weekly bosses — one spawns every Monday; first task-check each day = hits */
+  bossNames: [
+    ['Procrastination Oni', '👹'], ['Doomscroll Yōkai', '📱'], ['Subscription Slime', '🟢'],
+    ['Sleep-Debt Dragon', '🐉'], ['Impulse Kappa', '🥒'], ['Distraction Tengu', '🪶'],
+    ['The Guilt Tab', '🌫️'], ['Sunrise Sleep Thief', '🌅'],
+  ],
+  bossHp: 45,
+  bossReward: 150,
+
+  achievements: [
+    { id: 'first_task',  name: 'Press Start',        desc: 'Complete your first task', gold: 10,  icon: '🕹️' },
+    { id: 'day_won',     name: 'Day One Victory',    desc: 'Win your first day', gold: 25, icon: '🌅' },
+    { id: 'streak7',     name: 'One Week Deep',      desc: 'Hold a 7-day streak', gold: 60, icon: '🔥' },
+    { id: 'streak30',    name: 'Routine Goblin King', desc: 'Hold a 30-day streak', gold: 200, icon: '👑' },
+    { id: 'level5',      name: 'Japan Prep Recruit', desc: 'Reach level 5', gold: 75, icon: '⭐' },
+    { id: 'level10',     name: 'Move-Prep Mode',     desc: 'Reach level 10', gold: 250, icon: '🌟' },
+    { id: 'tasks100',    name: 'Century of Checks',  desc: 'Complete 100 tasks', gold: 50, icon: '💯' },
+    { id: 'tasks500',    name: 'Half-Thousand Grind', desc: 'Complete 500 tasks', gold: 150, icon: '🏗️' },
+    { id: 'first_deadline', name: 'Deadline Slayer', desc: 'Clear your first hard deadline', gold: 40, icon: '📅' },
+    { id: 'japan1k',     name: 'First Stack',        desc: 'Japan Fund reaches $1,000', gold: 50, icon: '💴' },
+    { id: 'japan5k',     name: 'Serious Money',      desc: 'Japan Fund reaches $5,000', gold: 150, icon: '💰' },
+    { id: 'japan14k',    name: 'Fully Funded',       desc: 'Japan Fund reaches $14,000', gold: 500, icon: '🗾' },
+    { id: 'vocab20',     name: 'Tool Talk',          desc: 'Learn all Stage 1 construction words', gold: 60, icon: '🈯' },
+    { id: 'first_buy',   name: 'Window Shopper No More', desc: 'Buy your first shop item', gold: 15, icon: '🛒' },
+    { id: 'full_set',    name: 'Dressed for the Job', desc: 'Equip weapon, shield, helmet, armor, and accessory at once', gold: 100, icon: '🥷' },
+    { id: 'first_pet',   name: 'Party of Two',       desc: 'Equip a pet companion', gold: 30, icon: '🐾' },
+    { id: 'region1',     name: 'Out the Front Door', desc: 'Complete your first expedition region', gold: 40, icon: '🚪' },
+    { id: 'region_all',  name: 'The Long Road North', desc: 'Complete all 6 expedition regions', gold: 400, icon: '🗺️' },
+    { id: 'boss_first',  name: 'Boss Down',          desc: 'Defeat your first weekly boss', gold: 50, icon: '⚔️' },
+    { id: 'boss5',       name: 'Monster Hunter',     desc: 'Defeat 5 weekly bosses', gold: 150, icon: '🏆' },
+  ],
+
   calendarRef: {
     daily: [
       'Wake-up + Dashboard — set based on current sleep, adjust weekly',
